@@ -15,7 +15,7 @@ export const AdminDashboard = () => {
     email: '',
     password: '',
     full_name: '',
-    role: 'single_person',
+    role: 'donor',
     organization_name: '',
     phone: '',
   });
@@ -75,7 +75,7 @@ export const AdminDashboard = () => {
       if (!res.ok) throw new Error(data.detail || 'User creation failed');
       alert(`User ${newUser.email} added to database.`);
       setShowAddModal(false);
-      setNewUser({ email: '', password: '', full_name: '', role: 'single_person', organization_name: '', phone: '' });
+      setNewUser({ email: '', password: '', full_name: '', role: 'donor', organization_name: '', phone: '' });
       fetchAdminData();
     } catch (err) {
       alert('Error: ' + err.message);
@@ -127,14 +127,6 @@ export const AdminDashboard = () => {
               {stats.user_statistics.organization}
             </div>
             <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>Relief & Warehouse Orgs</div>
-          </div>
-
-          <div className="glass-card">
-            <span style={{ color: '#9ca3af', fontSize: '0.8rem', fontWeight: 600 }}>Single Persons</span>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#a78bfa', marginTop: '6px' }}>
-              {stats.user_statistics.single_person}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>Donors & Citizens</div>
           </div>
 
           <div className="glass-card">
@@ -197,7 +189,7 @@ export const AdminDashboard = () => {
                       {u.hashed_password}
                     </td>
                     <td>
-                      <span className={`badge badge-${u.role === 'single_person' ? 'user' : u.role === 'government' ? 'govt' : u.role}`}>
+                      <span className={`badge ${u.role === 'government' ? 'badge-govt' : ['organization','volunteer'].includes(u.role) ? 'badge-org' : u.role === 'hospital' ? 'badge-hospital' : u.role === 'shelter' ? 'badge-shelter' : u.role === 'admin' ? 'badge-admin' : 'badge-user'}`}>
                         {u.role}
                       </span>
                     </td>
@@ -273,7 +265,9 @@ export const AdminDashboard = () => {
                   <option value="organization">Organization</option>
                   <option value="hospital">Hospital</option>
                   <option value="shelter">Disaster Shelter</option>
-                  <option value="single_person">Single Person</option>
+                  <option value="volunteer">Volunteer</option>
+                  <option value="donor">Donor</option>
+                  <option value="beneficiary">Citizen / Beneficiary</option>
                 </select>
               </div>
 

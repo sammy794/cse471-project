@@ -44,7 +44,7 @@ def seed_database():
             email="citizen@gmail.com",
             hashed_password=hash_password("citizen123"),
             full_name="Rafiqul Islam (Donor / Citizen)",
-            role="single_person",
+            role="donor",
             organization_name=None,
             phone="+8801811223344"
         ),
@@ -195,7 +195,7 @@ def seed_database():
         models.ResourceRequest(
             requester_name="Sylhet M.A.G. Osmani Medical College Hospital",
             requester_email="osmani.hospital@sylhet.gov.bd",
-            requester_role="single_person",
+            requester_role="donor",
             item_category="Medicine",
             item_name="Water Purification Tablets & Cholera Vaccine Kits",
             quantity=500.0,

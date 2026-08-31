@@ -102,3 +102,21 @@ def require_shelter(user: models.User = Depends(get_current_user)):
             detail="Disaster Shelter privileges required"
         )
     return user
+
+
+def require_volunteer(user: models.User = Depends(get_current_user)):
+    if user.role != "volunteer":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Volunteer privileges required")
+    return user
+
+
+def require_donor(user: models.User = Depends(get_current_user)):
+    if user.role != "donor":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Donor privileges required")
+    return user
+
+
+def require_beneficiary(user: models.User = Depends(get_current_user)):
+    if user.role != "beneficiary":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Citizen / Beneficiary privileges required")
+    return user

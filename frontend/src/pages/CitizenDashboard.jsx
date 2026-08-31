@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, PlusCircle, Heart, Navigation, Truck, ShieldAlert, CheckCircle, CreditCard, Trash2 } from 'lucide-react';
+import { User, PlusCircle, Navigation, Truck, ShieldAlert, CheckCircle, Trash2, MessageSquare } from 'lucide-react';
 
 export const CitizenDashboard = () => {
   const { user, token, API_BASE, deleteAccount } = useAuth();
   const [myRequests, setMyRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [showDonateModal, setShowDonateModal] = useState(false);
+  const [complaints, setComplaints] = useState([]);
+  const [feedback, setFeedback] = useState({ submission_type: 'Complaint', category: 'Disaster Response Service', subject: '', description: '' });
+  const [serviceMessage, setServiceMessage] = useState('');
 
   // Form states
   const [newRequest, setNewRequest] = useState({
@@ -21,11 +23,10 @@ export const CitizenDashboard = () => {
     destination_lng: 91.3950,
   });
 
-  const [donationAmount, setDonationAmount] = useState('1000');
-  const [bkashNumber, setBkashNumber] = useState('');
 
   useEffect(() => {
     fetchMyRequests();
+    fetchComplaints();
   }, [token, user?.email]);
 
   const fetchMyRequests = async () => {
@@ -41,6 +42,28 @@ export const CitizenDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchComplaints = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/service/complaints/mine`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setComplaints(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const submitFeedback = async (e) => {
+    e.preventDefault();
+    setServiceMessage('');
+    const res = await fetch(`${API_BASE}/service/complaints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(feedback),
+    });
+    const data = await res.json();
+    if (!res.ok) return setServiceMessage(data.detail || 'Complaint/feedback submission failed.');
+    setFeedback({ ...feedback, subject: '', description: '' });
+    setServiceMessage('Your complaint/feedback was submitted to government review.');
+    fetchComplaints();
   };
 
   const handleRequestSubmit = async (e) => {
@@ -63,16 +86,6 @@ export const CitizenDashboard = () => {
     }
   };
 
-  const handleDonationSubmit = (e) => {
-    e.preventDefault();
-    if (!bkashNumber) {
-      alert('Please enter your bKash mobile number');
-      return;
-    }
-    alert(`[bKash PAYMENT SIMULATION SUCCESS]\nThank you ${user?.full_name}!\nDonation of ৳${donationAmount} BDT processed successfully via bKash Merchant Gateway.\nTracking ID: BKASH-${Math.floor(100000 + Math.random() * 900000)}`);
-    setShowDonateModal(false);
-    setBkashNumber('');
-  };
 
   const handleDeleteProfile = async () => {
     if (window.confirm('Are you sure you want to permanently delete your account profile? This action will erase your user data from the database.')) {
@@ -86,23 +99,20 @@ export const CitizenDashboard = () => {
   };
 
   return (
-    <div className="theme-single_person" style={{ padding: '28px' }}>
+    <div className="theme-donor" style={{ padding: '28px' }}>
       {/* Top Banner */}
       <div className="glass-card" style={{ marginBottom: '24px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(17, 24, 39, 0.8))' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <span className="badge badge-user" style={{ marginBottom: '8px' }}>
-              <User size={14} /> Single Person / Citizen Portal
+              <User size={14} /> Citizen Portal
             </span>
             <h1 style={{ color: 'white', fontSize: '1.8rem' }}>Welcome, {user?.full_name}</h1>
             <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginTop: '4px' }}>
-              Request emergency assistance supplies, track real-time relief deliveries, or contribute to disaster relief campaigns.
+              Request emergency assistance supplies and track real-time relief deliveries.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn btn-success" onClick={() => setShowDonateModal(true)}>
-              <Heart size={16} /> Donate via bKash
-            </button>
             <button className="btn btn-primary" onClick={() => setShowRequestModal(true)}>
               <PlusCircle size={16} /> Request Emergency Aid
             </button>
@@ -174,7 +184,7 @@ export const CitizenDashboard = () => {
 
             <div style={{ background: 'rgba(31, 41, 55, 0.5)', padding: '12px 16px', borderRadius: '10px' }}>
               <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>User Role</span>
-              <div style={{ color: '#a78bfa', fontWeight: 700 }}>Single Person (Citizen / Donor)</div>
+              <div style={{ color: '#a78bfa', fontWeight: 700 }}>Citizen</div>
             </div>
 
             <div style={{ background: 'rgba(31, 41, 55, 0.5)', padding: '12px 16px', borderRadius: '10px' }}>
@@ -191,6 +201,21 @@ export const CitizenDashboard = () => {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="glass-card" style={{ marginTop: '24px' }}>
+        <h2 style={{ fontSize: '1.2rem', color: 'white', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><MessageSquare color="#8b5cf6" /> Feedback & Complaints</h2>
+        {serviceMessage && <div className={serviceMessage.includes('failed') ? 'feature-error' : 'feature-success'}>{serviceMessage}</div>}
+        <form onSubmit={submitFeedback}>
+          <div className="feature-form-grid">
+            <div className="form-group"><label>Type</label><select className="input-control" value={feedback.submission_type} onChange={e => setFeedback({ ...feedback, submission_type: e.target.value })}><option>Complaint</option><option>Feedback</option></select></div>
+            <div className="form-group"><label>Category</label><input className="input-control" value={feedback.category} onChange={e => setFeedback({ ...feedback, category: e.target.value })} /></div>
+          </div>
+          <div className="form-group"><label>Subject</label><input required className="input-control" value={feedback.subject} onChange={e => setFeedback({ ...feedback, subject: e.target.value })} /></div>
+          <div className="form-group"><label>Details</label><textarea required rows="3" className="input-control" value={feedback.description} onChange={e => setFeedback({ ...feedback, description: e.target.value })} /></div>
+          <button className="btn btn-primary">Submit to Government Review</button>
+        </form>
+        <div className="data-table-container" style={{ marginTop: '16px' }}><table className="data-table"><thead><tr><th>Type</th><th>Subject</th><th>Status</th><th>Government Response</th></tr></thead><tbody>{complaints.length === 0 ? <tr><td colSpan="4">No complaint or feedback records yet.</td></tr> : complaints.map(c => <tr key={c.id}><td>{c.submission_type}</td><td>{c.subject}</td><td><span className={`badge ${c.status === 'Resolved' ? 'badge-org' : 'badge-warning'}`}>{c.status}</span></td><td>{c.official_response || '-'}</td></tr>)}</tbody></table></div>
       </div>
 
       {/* Submit Request Modal */}
@@ -282,53 +307,6 @@ export const CitizenDashboard = () => {
                   Submit Request
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowRequestModal(false)}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* bKash Donation Modal */}
-      {showDonateModal && (
-        <div className="modal-overlay" onClick={() => setShowDonateModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ color: '#e11d48', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CreditCard /> bKash Emergency Relief Donation
-            </h2>
-            <form onSubmit={handleDonationSubmit}>
-              <div className="form-group">
-                <label>Donation Amount (BDT ৳)</label>
-                <select
-                  className="input-control"
-                  value={donationAmount}
-                  onChange={(e) => setDonationAmount(e.target.value)}
-                >
-                  <option value="500">৳ 500 BDT</option>
-                  <option value="1000">৳ 1,000 BDT</option>
-                  <option value="5000">৳ 5,000 BDT</option>
-                  <option value="10000">৳ 10,000 BDT</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>bKash Mobile Account Number</label>
-                <input
-                  type="text"
-                  className="input-control"
-                  required
-                  placeholder="017XXXXXXXX / 018XXXXXXXX"
-                  value={bkashNumber}
-                  onChange={(e) => setBkashNumber(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <button type="submit" className="btn btn-danger" style={{ flex: 1, background: 'linear-gradient(135deg, #e11d48, #be123c)' }}>
-                  Confirm bKash Payment (৳{donationAmount})
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowDonateModal(false)}>
                   Cancel
                 </button>
               </div>

@@ -5,8 +5,27 @@ from typing import List, Optional
 from app.database import get_db
 from app import models, schemas
 from app.auth import get_current_user, require_organization
+from app.sms import send_bulk_sms
 
 router = APIRouter(prefix="/api/inventory", tags=["Module 2: Resource & Logistics Coordination"])
+
+
+def _notify_low_stock_sms(db: Session, item: models.InventoryItem) -> None:
+    """Send an SMS alert to admin and organization users when inventory is low."""
+    admins_and_orgs = db.query(models.User).filter(
+        models.User.role.in_(["admin", "organization"]),
+        models.User.phone.isnot(None),
+        models.User.phone != "",
+    ).all()
+    phones = [u.phone for u in admins_and_orgs if u.phone]
+    if phones:
+        sms_body = (
+            f"[DisasterNet LOW STOCK] {item.item_name} ({item.category}) at "
+            f"{item.warehouse_location} is below threshold: "
+            f"{item.quantity} {item.unit} remaining (minimum: {item.minimum_threshold} {item.unit}). "
+            f"Organization: {item.organization_name}."
+        )
+        send_bulk_sms(phones, sms_body)
 
 # --- Helper: Haversine distance formula simulation for Route Optimization ---
 def calculate_haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -56,6 +75,11 @@ def create_inventory_item(
 
     res = schemas.InventoryItemResponse.model_validate(db_item).model_dump()
     res["is_low_stock"] = db_item.quantity <= db_item.minimum_threshold
+
+    # --- SMS: Alert admins if new item is already below threshold ---
+    if res["is_low_stock"]:
+        _notify_low_stock_sms(db, db_item)
+
     return res
 
 
@@ -92,6 +116,11 @@ def update_inventory_quantity(
 
     res = schemas.InventoryItemResponse.model_validate(db_item).model_dump()
     res["is_low_stock"] = db_item.quantity <= db_item.minimum_threshold
+
+    # --- SMS: Alert admins when stock drops below threshold ---
+    if res["is_low_stock"]:
+        _notify_low_stock_sms(db, db_item)
+
     return res
 
 
@@ -115,7 +144,7 @@ def submit_resource_request(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Users (Single person, Hospital, Shelter) submit emergency resource requests."""
+    """Users (Hospital, Shelter, Donor, Beneficiary) submit emergency resource requests."""
     new_request = models.ResourceRequest(
         requester_name=current_user.full_name,
         requester_email=current_user.email,

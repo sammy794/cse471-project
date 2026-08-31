@@ -4,8 +4,17 @@ from typing import List
 from app.database import get_db
 from app import models, schemas
 from app.auth import get_current_user, require_government
+from app.sms import send_bulk_sms
 
 router = APIRouter(prefix="/api/disasters", tags=["Module 1: Disaster Management"])
+
+
+def _broadcast_sms_to_all_users(db: Session, message: str) -> None:
+    """Send an SMS notification to every registered user who has a phone number."""
+    users = db.query(models.User).filter(models.User.phone.isnot(None), models.User.phone != "").all()
+    phones = [u.phone for u in users if u.phone]
+    if phones:
+        send_bulk_sms(phones, message)
 
 # --- Disaster Events ---
 @router.get("/", response_model=List[schemas.DisasterResponse])
@@ -58,6 +67,15 @@ def declare_disaster_event(
 
     db.commit()
     db.refresh(new_disaster)
+
+    # --- SMS: Broadcast disaster declaration to all registered users ---
+    sms_body = (
+        f"[DisasterNet ALERT] {disaster_in.disaster_type} disaster declared: "
+        f"{disaster_in.title}. Affected: {disaster_in.affected_districts}. "
+        f"Severity: {disaster_in.severity}. Duration: {disaster_in.expected_duration}."
+    )
+    _broadcast_sms_to_all_users(db, sms_body)
+
     return new_disaster
 
 
@@ -109,4 +127,12 @@ def publish_emergency_alert(
     db.add(new_alert)
     db.commit()
     db.refresh(new_alert)
+
+    # --- SMS: Broadcast emergency alert to all registered users ---
+    sms_body = (
+        f"[DisasterNet {alert_in.alert_level.upper()}] {alert_in.title}: "
+        f"{alert_in.message} | Area: {alert_in.affected_area}"
+    )
+    _broadcast_sms_to_all_users(db, sms_body)
+
     return new_alert

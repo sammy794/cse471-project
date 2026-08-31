@@ -1,7 +1,13 @@
+from pathlib import Path
+from dotenv import load_dotenv
+
+ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(ENV_FILE)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
-from app.routers import auth_router, admin_router, disaster_router, inventory_router, hospital_router, shelter_router
+from app.routers import auth_router, admin_router, disaster_router, inventory_router, hospital_router, shelter_router, operations_router, sms_router, sslcommerz_router
 from app.seed import seed_database
 
 # Create DB tables
@@ -12,7 +18,7 @@ seed_database()
 
 app = FastAPI(
     title="DisasterNet API",
-    description="Backend API for DisasterNet - Intelligent Disaster Response & Resource Coordination System (Module 1 & 2)",
+    description="Backend API for DisasterNet - Intelligent Disaster Response, Field Operations, Donations and Public Service Coordination",
     version="1.0.0"
 )
 
@@ -34,12 +40,15 @@ app.include_router(disaster_router.router)
 app.include_router(inventory_router.router)
 app.include_router(hospital_router.router)
 app.include_router(shelter_router.router)
+app.include_router(operations_router.router)
+app.include_router(sslcommerz_router.router)
+app.include_router(sms_router.router)
 
 @app.get("/")
 def read_root():
     return {
         "status": "online",
         "system": "DisasterNet — Intelligent Disaster Response and Resource Coordination System",
-        "modules": ["Module 1: Emergency Response Management", "Module 2: Resource & Logistics Coordination"],
+        "capabilities": ["Emergency Response", "Resource Logistics", "Volunteer Field Operations", "Campaign Transparency", "Public Service Management"],
         "documentation": "/docs"
     }

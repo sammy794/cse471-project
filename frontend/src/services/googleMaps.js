@@ -1,6 +1,23 @@
 let googleMapsPromise = null;
 
-export const getGoogleMapsApiKey = () => (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim();
+export const getGoogleMapsApiKey = () => {
+  const envKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim();
+  if (envKey) return envKey;
+  if (typeof window !== 'undefined') {
+    return (localStorage.getItem('disasternet_gmaps_key') || '').trim();
+  }
+  return '';
+};
+
+export const setGoogleMapsApiKey = (key) => {
+  if (typeof window !== 'undefined') {
+    if (key) {
+      localStorage.setItem('disasternet_gmaps_key', key.trim());
+    } else {
+      localStorage.removeItem('disasternet_gmaps_key');
+    }
+  }
+};
 
 export const hasGoogleMapsApiKey = () => Boolean(getGoogleMapsApiKey());
 

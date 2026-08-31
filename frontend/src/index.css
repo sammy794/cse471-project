@@ -220,6 +220,16 @@ h1, h2, h3, h4, h5, h6 {
   border-top: 4px solid var(--user-violet);
 }
 
+.theme-donor {
+  --accent: var(--user-violet);
+  border-top: 4px solid var(--user-violet);
+}
+
+.theme-beneficiary {
+  --accent: var(--user-violet);
+  border-top: 4px solid var(--user-violet);
+}
+
 /* Data Table */
 .data-table-container {
   overflow-x: auto;

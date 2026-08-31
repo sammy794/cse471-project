@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -10,9 +11,20 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
-    role = Column(String, nullable=False)  # "admin", "organization", "single_person", "government", "hospital", "shelter"
+    role = Column(String, nullable=False)  # "admin", "organization", "government", "hospital", "shelter"
     organization_name = Column(String, nullable=True)
     phone = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class OrganizationVerification(Base):
+    __tablename__ = "organization_verifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    verification_status = Column(String, nullable=False, default="Pending")
+    verified_by = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -170,3 +182,257 @@ class ShelterDistribution(Base):
     recipient_group = Column(String, nullable=False)
     notes = Column(Text, nullable=True)
     distributed_at = Column(DateTime, default=datetime.utcnow)
+
+# --- Volunteer & Field Operations ---
+class VolunteerProfile(Base):
+    __tablename__ = "volunteer_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    nid_number = Column(String, nullable=True)
+    profession = Column(String, nullable=True)
+    skills = Column(Text, nullable=False, default="")
+    availability = Column(String, nullable=False, default="Available")
+    district = Column(String, nullable=True)
+    emergency_contact_name = Column(String, nullable=True)
+    emergency_contact_phone = Column(String, nullable=True)
+    identity_document = Column(String, nullable=True)
+    verification_status = Column(String, nullable=False, default="Pending")
+    verified_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VolunteerMission(Base):
+    __tablename__ = "volunteer_missions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    mission_type = Column(String, nullable=False)
+    disaster_id = Column(Integer, ForeignKey("disaster_events.id"), nullable=True)
+    location = Column(String, nullable=False)
+    required_skills = Column(Text, nullable=True)
+    description = Column(Text, nullable=False)
+    assigned_volunteer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    assigned_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assigned_by_name = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="Assigned")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    accepted_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class FieldReport(Base):
+    __tablename__ = "field_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    volunteer_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    mission_id = Column(Integer, ForeignKey("volunteer_missions.id"), nullable=True)
+    report_type = Column(String, nullable=False, default="Field")
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    photo_file = Column(String, nullable=True)
+    summary = Column(Text, nullable=False)
+    rescued_people = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# --- Citizen / Beneficiary Assistance ---
+class BeneficiaryProfile(Base):
+    __tablename__ = "beneficiary_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    qr_code = Column(String, unique=True, nullable=False, index=True)
+    family_size = Column(Integer, nullable=False, default=1)
+    district = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    vulnerability_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AssistanceRequest(Base):
+    __tablename__ = "assistance_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    beneficiary_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    disaster_id = Column(Integer, ForeignKey("disaster_events.id"), nullable=True)
+    request_type = Column(String, nullable=False)
+    details = Column(Text, nullable=False)
+    family_size = Column(Integer, nullable=False, default=1)
+    status = Column(String, nullable=False, default="Pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SOSRequest(Base):
+    __tablename__ = "sos_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    beneficiary_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    message = Column(Text, nullable=False)
+    location = Column(String, nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    status = Column(String, nullable=False, default="Active")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AidDistribution(Base):
+    __tablename__ = "aid_distributions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    beneficiary_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    beneficiary_qr = Column(String, nullable=False, index=True)
+    volunteer_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    mission_id = Column(Integer, ForeignKey("volunteer_missions.id"), nullable=True)
+    aid_type = Column(String, nullable=False)
+    quantity = Column(Float, nullable=False)
+    unit = Column(String, nullable=False)
+    notes = Column(Text, nullable=True)
+    confirmed_by_beneficiary = Column(Integer, nullable=False, default=0)
+    distributed_at = Column(DateTime, default=datetime.utcnow)
+    confirmed_at = Column(DateTime, nullable=True)
+
+
+# --- Campaigns, Donations, Transparency & Public Service ---
+class Campaign(Base):
+    __tablename__ = "campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    organization_name = Column(String, nullable=False)
+    disaster_id = Column(Integer, ForeignKey("disaster_events.id"), nullable=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    target_amount = Column(Float, nullable=False)
+    collected_amount = Column(Float, nullable=False, default=0.0)
+    utilized_amount = Column(Float, nullable=False, default=0.0)
+    status = Column(String, nullable=False, default="Active")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    end_date = Column(String, nullable=True)
+
+
+class CampaignAllocation(Base):
+    __tablename__ = "campaign_allocations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    category = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    description = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Donation(Base):
+    __tablename__ = "donations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    donor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    donor_name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    payment_gateway = Column(String, nullable=False, default="SSLCOMMERZ")
+    payment_reference = Column(String, nullable=False)
+    tracking_id = Column(String, unique=True, nullable=False, index=True)
+    gateway_transaction_id = Column(String, unique=True, nullable=False, index=True)
+    payment_status = Column(String, nullable=False, default="Completed")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DonationUtilization(Base):
+    __tablename__ = "donation_utilizations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    donation_id = Column(Integer, ForeignKey("donations.id"), nullable=False, index=True)
+    tracking_id = Column(String, nullable=False, index=True)
+    donor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    donor_name = Column(String, nullable=False)
+    volunteer_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    volunteer_name = Column(String, nullable=False)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    campaign_title = Column(String, nullable=False)
+    mission_id = Column(Integer, ForeignKey("volunteer_missions.id"), nullable=True, index=True)
+    mission_title = Column(String, nullable=True)
+    amount = Column(Float, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SSLCommerzPayment(Base):
+    __tablename__ = "sslcommerz_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    donation_id = Column(Integer, ForeignKey("donations.id"), unique=True, nullable=False, index=True)
+    tran_id = Column(String, unique=True, nullable=False, index=True)
+    session_key = Column(String, unique=True, nullable=True, index=True)
+    gateway_page_url = Column(Text, nullable=True)
+    validation_id = Column(String, nullable=True, index=True)
+    bank_tran_id = Column(String, nullable=True, index=True)
+    card_type = Column(String, nullable=True)
+    transaction_status = Column(String, nullable=False, default="Initiated")
+    status_message = Column(Text, nullable=True)
+    create_response = Column(Text, nullable=True)
+    validation_response = Column(Text, nullable=True)
+    query_response = Column(Text, nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SSLCommerzRefund(Base):
+    __tablename__ = "sslcommerz_refunds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    donation_id = Column(Integer, ForeignKey("donations.id"), nullable=False, index=True)
+    tran_id = Column(String, nullable=False, index=True)
+    bank_tran_id = Column(String, nullable=False, index=True)
+    refund_trans_id = Column(String, unique=True, nullable=False, index=True)
+    refund_ref_id = Column(String, unique=True, nullable=True, index=True)
+    amount = Column(Float, nullable=False)
+    status = Column(String, nullable=False, default="Initiated")
+    reason = Column(Text, nullable=False)
+    response_data = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ComplaintFeedback(Base):
+    __tablename__ = "complaints_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    submitted_by = Column(String, nullable=False)
+    user_role = Column(String, nullable=False)
+    submission_type = Column(String, nullable=False, default="Complaint")
+    category = Column(String, nullable=False)
+    subject = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="Submitted")
+    official_response = Column(Text, nullable=True)
+    reviewed_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class FraudAlert(Base):
+    __tablename__ = "fraud_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    alert_type = Column(String, nullable=False)
+    severity = Column(String, nullable=False, default="Medium")
+    description = Column(Text, nullable=False)
+    related_reference = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="Open")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SMSOTPStore(Base):
+    __tablename__ = "sms_otp_store"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phone = Column(String, nullable=False, index=True)
+    otp = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)

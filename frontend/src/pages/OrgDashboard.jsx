@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Warehouse, AlertTriangle, PlusCircle, Navigation, Truck, Package, Layers, RefreshCw } from 'lucide-react';
 import { calculateGoogleDistanceMatrix, hasGoogleMapsApiKey } from '../services/googleMaps';
+import { OrganizationOperations } from './OrganizationOperations';
 
 export const OrgDashboard = () => {
   const { token, API_BASE, user } = useAuth();
@@ -299,6 +300,8 @@ export const OrgDashboard = () => {
           </div>
         </div>
       </div>
+
+      <OrganizationOperations />
 
       {/* Add Item Modal */}
       {showAddItemModal && (

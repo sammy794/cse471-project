@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Shield, Eye, EyeOff, AlertCircle, LogIn, ShieldAlert, Warehouse, Radio, Users } from 'lucide-react';
 
-export const Login = ({ onSwitchToRegister }) => {
+export const Login = ({ onSwitchToRegister, onViewTransparency }) => {
   const { login, error } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -83,7 +83,7 @@ export const Login = ({ onSwitchToRegister }) => {
         <div className="glass-card">
           <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '6px' }}>Sign In to Your Portal</h2>
           <p style={{ color: '#9ca3af', fontSize: '0.88rem', marginBottom: '24px' }}>
-            Enter the email address and password you registered with.
+            Enter your registered email/name and password.
           </p>
 
           {(formError || error) && (
@@ -94,13 +94,13 @@ export const Login = ({ onSwitchToRegister }) => {
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label>Email Address</label>
+              <label>Email Address or Registered Name</label>
               <input
                 id="login-email"
-                type="email"
+                type="text"
                 className="input-control"
                 required
-                placeholder="your@email.com"
+                placeholder="your@email.com or registered name"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -152,6 +152,7 @@ export const Login = ({ onSwitchToRegister }) => {
               Register Now
             </span>
           </p>
+          <p style={{ textAlign: 'center', color: '#9ca3af', marginTop: '10px', fontSize: '0.86rem' }}><span onClick={onViewTransparency} style={{ color: '#34d399', cursor: 'pointer', fontWeight: 600 }}>View Public Transparency Portal</span></p>
         </div>
 
       </div>

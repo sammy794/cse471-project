@@ -52,9 +52,11 @@ def get_database_statistics(
     admins_count = db.query(models.User).filter(models.User.role == "admin").count()
     gov_count = db.query(models.User).filter(models.User.role == "government").count()
     org_count = db.query(models.User).filter(models.User.role == "organization").count()
-    citizen_count = db.query(models.User).filter(models.User.role == "single_person").count()
     hospital_count = db.query(models.User).filter(models.User.role == "hospital").count()
     shelter_count = db.query(models.User).filter(models.User.role == "shelter").count()
+    volunteer_count = db.query(models.User).filter(models.User.role == "volunteer").count()
+    donor_count = db.query(models.User).filter(models.User.role == "donor").count()
+    beneficiary_count = db.query(models.User).filter(models.User.role == "beneficiary").count()
 
     total_disasters = db.query(models.DisasterEvent).count()
     active_disasters = db.query(models.DisasterEvent).filter(models.DisasterEvent.status == "Active").count()
@@ -68,9 +70,11 @@ def get_database_statistics(
             "admin": admins_count,
             "government": gov_count,
             "organization": org_count,
-            "single_person": citizen_count,
             "hospital": hospital_count,
-            "shelter": shelter_count
+            "shelter": shelter_count,
+            "volunteer": volunteer_count,
+            "donor": donor_count,
+            "beneficiary": beneficiary_count
         },
         "disaster_statistics": {
             "total": total_disasters,
