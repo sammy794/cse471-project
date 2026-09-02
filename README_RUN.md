@@ -128,3 +128,44 @@ From the Organization dashboard, **Run Route Optimization & Dispatch** now:
 6. deducts available stock using the existing inventory logic.
 
 Google currently classifies the JavaScript Distance Matrix service as legacy/deprecated. DisasterNet therefore tries the requested Distance Matrix service first and can fall back to Google's current Route Matrix service if the legacy service is unavailable. If Google Maps itself is unavailable, the project's previous Haversine optimizer remains as the final no-error fallback.
+
+## SSLCOMMERZ Payment Gateway API setup
+
+The donor workflow uses SSLCOMMERZ Hosted Checkout. Store credentials remain on the FastAPI backend and are never exposed to React.
+
+Configure `backend/.env` with your Sandbox credentials:
+
+```env
+SSLCOMMERZ_STORE_ID=YOUR_SANDBOX_STORE_ID
+SSLCOMMERZ_STORE_PASSWORD=YOUR_SANDBOX_STORE_PASSWORD
+SSLCOMMERZ_SANDBOX=true
+SSLCOMMERZ_BASE_URL=https://sandbox.sslcommerz.com
+SSLCOMMERZ_FRONTEND_URL=http://127.0.0.1:5173
+SSLCOMMERZ_CALLBACK_BASE_URL=https://YOUR-PUBLIC-HTTPS-BACKEND
+```
+
+For local development, expose FastAPI port `8000` through a public HTTPS tunnel such as ngrok and use that URL for `SSLCOMMERZ_CALLBACK_BASE_URL`. In the SSLCOMMERZ Sandbox store settings, set the IPN URL to:
+
+```text
+https://YOUR-PUBLIC-HTTPS-BACKEND/api/sslcommerz/ipn
+```
+
+Then start DisasterNet:
+
+```powershell
+.\RUN_DISASTERNET.bat
+```
+
+### Implemented payment flow
+
+- DisasterNet creates a unique donation tracking ID and SSLCOMMERZ transaction ID.
+- FastAPI creates the SSLCOMMERZ checkout session and redirects the donor to the hosted payment page.
+- Payment details are entered on SSLCOMMERZ, not stored in the DisasterNet frontend.
+- Success/fail/cancel callbacks and IPN notifications return to FastAPI.
+- FastAPI validates successful payments with SSLCOMMERZ before marking a donation as completed.
+- Only a validated completed payment increases the campaign's collected funds.
+- Donors can synchronize payment status from Donation History.
+- Tracking ID, donor QR, campaign utilization, receipts and transparency records continue to use the verified donation record.
+- Store credentials are kept in `backend/.env`, which is excluded by `backend/.gitignore`.
+
+The SQLite path is anchored to `backend/disasternet.db`, so starting Uvicorn from a different working directory will not silently create a second database file.

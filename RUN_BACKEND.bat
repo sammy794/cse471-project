@@ -22,7 +22,7 @@ if not errorlevel 1 (
   )
 )
 
-%PYTHON_CMD% -c "import fastapi, uvicorn, sqlalchemy, jwt" >nul 2>nul
+%PYTHON_CMD% -c "import fastapi, uvicorn, sqlalchemy, jwt, requests, dotenv" >nul 2>nul
 if errorlevel 1 (
   echo ERROR: Backend Python packages are missing.
   echo Run SETUP_WINDOWS.bat once, then try again.

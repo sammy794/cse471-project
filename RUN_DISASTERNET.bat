@@ -16,6 +16,25 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo Checking for older DisasterNet servers...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }"
+if errorlevel 1 (
+  echo.
+  echo ERROR: Port 8000 is already in use by an older backend.
+  echo Close the old DisasterNet Backend terminal with CTRL+C, then run this file again.
+  pause
+  exit /b 1
+)
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-NetTCPConnection -State Listen -LocalPort 5173 -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }"
+if errorlevel 1 (
+  echo.
+  echo ERROR: Port 5173 is already in use by an older frontend.
+  echo Close the old DisasterNet Frontend terminal with CTRL+C, then run this file again.
+  pause
+  exit /b 1
+)
+
 echo Starting DisasterNet backend...
 start "DisasterNet Backend" cmd /k ""%~dp0RUN_BACKEND.bat""
 

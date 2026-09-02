@@ -7,7 +7,7 @@ class UserRegister(BaseModel):
     email: str
     password: str
     full_name: str
-    role: str  # "admin", "organization", "single_person", "government", "hospital", "shelter"
+    role: str  # admin, organization, government, hospital, shelter, volunteer, donor, beneficiary
     organization_name: Optional[str] = None
     phone: Optional[str] = None
 
@@ -47,6 +47,21 @@ class UserResponse(BaseModel):
 
 class UserWithPasswordResponse(UserResponse):
     hashed_password: str
+
+class OrganizationVerificationResponse(BaseModel):
+    id: int
+    organization_user_id: int
+    organization_name: Optional[str] = None
+    full_name: str
+    email: str
+    phone: Optional[str] = None
+    verification_status: str
+    verified_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
 
 class Token(BaseModel):
     access_token: str
@@ -279,3 +294,374 @@ class ShelterDistributionResponse(BaseModel):
     distributed_at: datetime
 
     model_config = {"from_attributes": True}
+
+# --- Volunteer & Field Operations Schemas ---
+class VolunteerProfileUpdate(BaseModel):
+    nid_number: Optional[str] = None
+    profession: Optional[str] = None
+    skills: str = ""
+    availability: str = "Available"
+    district: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+
+
+class VolunteerProfileResponse(VolunteerProfileUpdate):
+    id: int
+    user_id: int
+    identity_document: Optional[str] = None
+    verification_status: str
+    verified_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class MissionCreate(BaseModel):
+    title: str
+    mission_type: str
+    disaster_id: Optional[int] = None
+    location: str
+    required_skills: Optional[str] = None
+    description: str
+    assigned_volunteer_id: int
+
+
+class MissionStatusUpdate(BaseModel):
+    status: str
+
+
+class MissionResponse(BaseModel):
+    id: int
+    title: str
+    mission_type: str
+    disaster_id: Optional[int] = None
+    location: str
+    required_skills: Optional[str] = None
+    description: str
+    assigned_volunteer_id: int
+    assigned_by_user_id: int
+    assigned_by_name: str
+    status: str
+    created_at: datetime
+    accepted_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AidDistributionCreate(BaseModel):
+    beneficiary_qr: str
+    mission_id: Optional[int] = None
+    aid_type: str
+    quantity: float = Field(gt=0)
+    unit: str
+    notes: Optional[str] = None
+
+
+class AidDistributionResponse(BaseModel):
+    id: int
+    beneficiary_user_id: int
+    beneficiary_qr: str
+    volunteer_user_id: int
+    mission_id: Optional[int] = None
+    aid_type: str
+    quantity: float
+    unit: str
+    notes: Optional[str] = None
+    confirmed_by_beneficiary: int
+    distributed_at: datetime
+    confirmed_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class FieldReportResponse(BaseModel):
+    id: int
+    volunteer_user_id: int
+    mission_id: Optional[int] = None
+    report_type: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    photo_file: Optional[str] = None
+    summary: str
+    rescued_people: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- Beneficiary Schemas ---
+class BeneficiaryProfileUpdate(BaseModel):
+    family_size: int = Field(default=1, ge=1)
+    district: Optional[str] = None
+    address: Optional[str] = None
+    vulnerability_notes: Optional[str] = None
+
+
+class BeneficiaryProfileResponse(BeneficiaryProfileUpdate):
+    id: int
+    user_id: int
+    qr_code: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AssistanceRequestCreate(BaseModel):
+    disaster_id: Optional[int] = None
+    request_type: str
+    details: str
+    family_size: int = Field(default=1, ge=1)
+
+
+class AssistanceRequestResponse(AssistanceRequestCreate):
+    id: int
+    beneficiary_user_id: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SOSCreate(BaseModel):
+    message: str
+    location: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class SOSResponse(SOSCreate):
+    id: int
+    beneficiary_user_id: int
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- Campaign, Donation, Transparency & Complaint Schemas ---
+class CampaignCreate(BaseModel):
+    disaster_id: Optional[int] = None
+    title: str
+    description: str
+    target_amount: float = Field(gt=0)
+    end_date: Optional[str] = None
+
+
+class CampaignResponse(CampaignCreate):
+    id: int
+    organization_user_id: int
+    organization_name: str
+    collected_amount: float
+    utilized_amount: float
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CampaignAllocationCreate(BaseModel):
+    category: str
+    amount: float = Field(gt=0)
+    description: str
+
+
+class CampaignAllocationResponse(CampaignAllocationCreate):
+    id: int
+    campaign_id: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+
+class DonationResponse(BaseModel):
+    id: int
+    campaign_id: int
+    donor_user_id: int
+    donor_name: str
+    amount: float
+    payment_gateway: str
+    payment_reference: str
+    tracking_id: str
+    gateway_transaction_id: str
+    payment_status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SSLCommerzPaymentCreate(BaseModel):
+    campaign_id: int
+    amount: float = Field(ge=10, le=500000)
+
+
+class SSLCommerzPaymentStartResponse(BaseModel):
+    donation_id: int
+    tracking_id: str
+    tran_id: str
+    session_key: Optional[str] = None
+    gateway_url: str
+    payment_status: str
+
+
+class DonationHistoryResponse(DonationResponse):
+    payment_gateway: str = "SSLCOMMERZ"
+    gateway_payment_id: Optional[str] = None
+    refunded_amount: float = 0.0
+    net_amount: float = 0.0
+    utilized_amount: float = 0.0
+    available_amount: float = 0.0
+
+
+class DonationUtilizationCreate(BaseModel):
+    donor_tracking_id: str
+    mission_id: Optional[int] = None
+    amount: float = Field(gt=0)
+    notes: Optional[str] = None
+
+    @field_validator('donor_tracking_id')
+    @classmethod
+    def tracking_required(cls, v):
+        value = v.strip()
+        if not value:
+            raise ValueError('Donor QR / tracking ID is required')
+        return value
+
+
+class DonationUtilizationResponse(BaseModel):
+    id: int
+    donation_id: int
+    tracking_id: str
+    donor_user_id: int
+    donor_name: str
+    volunteer_user_id: int
+    volunteer_name: str
+    campaign_id: int
+    campaign_title: str
+    mission_id: Optional[int] = None
+    mission_title: Optional[str] = None
+    amount: float
+    notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DonationRefundCreate(BaseModel):
+    amount: Optional[float] = Field(default=None, gt=0)
+    reason: str = "Donor requested refund"
+
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        value = v.strip()
+        if not value:
+            raise ValueError('Refund reason is required')
+        if len(value) > 255:
+            raise ValueError('Refund reason must be 255 characters or fewer')
+        return value
+
+
+class DonationRefundResponse(BaseModel):
+    id: int
+    donation_id: int
+    refund_trx_id: Optional[str] = None
+    amount: float
+    status: str
+    reason: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ComplaintCreate(BaseModel):
+    submission_type: str = "Complaint"
+    category: str
+    subject: str
+    description: str
+
+
+class ComplaintReview(BaseModel):
+    status: str
+    official_response: Optional[str] = None
+
+
+class ComplaintResponse(ComplaintCreate):
+    id: int
+    user_id: int
+    submitted_by: str
+    user_role: str
+    status: str
+    official_response: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class FraudAlertResponse(BaseModel):
+    id: int
+    alert_type: str
+    severity: str
+    description: str
+    related_reference: Optional[str] = None
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- SMS (Twilio) Schemas ---
+class SMSOTPSend(BaseModel):
+    phone: str
+
+    @field_validator('phone')
+    @classmethod
+    def phone_not_empty(cls, v):
+        value = v.strip()
+        if not value:
+            raise ValueError('Phone number is required')
+        return value
+
+
+class SMSOTPVerify(BaseModel):
+    phone: str
+    otp: str
+
+    @field_validator('otp')
+    @classmethod
+    def otp_format(cls, v):
+        value = ''.join(ch for ch in str(v) if ch.isdigit())
+        if len(value) != 6:
+            raise ValueError('Enter the 6-digit OTP code')
+        return value
+
+
+class SMSTestSend(BaseModel):
+    phone: str
+    message: str
+
+    @field_validator('phone')
+    @classmethod
+    def phone_required(cls, v):
+        value = v.strip()
+        if not value:
+            raise ValueError('Phone number is required')
+        return value
+
+    @field_validator('message')
+    @classmethod
+    def message_required(cls, v):
+        value = v.strip()
+        if not value:
+            raise ValueError('Message body is required')
+        return value

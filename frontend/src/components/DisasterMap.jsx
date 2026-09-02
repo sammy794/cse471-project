@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Home, Navigation, ShieldAlert, Truck, Warehouse } from 'lucide-react';
-import { hasGoogleMapsApiKey, loadGoogleMaps } from '../services/googleMaps';
+import { AlertTriangle, Check, Home, Key, Layers, Navigation, RefreshCw, ShieldAlert, Truck, Warehouse, X } from 'lucide-react';
+import { getGoogleMapsApiKey, hasGoogleMapsApiKey, loadGoogleMaps, setGoogleMapsApiKey } from '../services/googleMaps';
 
 const BANGLADESH_CENTER = { lat: 23.685, lng: 90.3563 };
 
@@ -22,58 +22,281 @@ const straightLineDistanceKm = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-const LegacyFallbackMap = ({ requests = [], reason }) => {
-  const getMapXY = (lat, lng) => {
-    const minLat = 20.5, maxLat = 26.6;
-    const minLng = 88.0, maxLng = 92.6;
-    const x = ((lng - minLng) / (maxLng - minLng)) * 700 + 50;
-    const y = 600 - (((lat - minLat) / (maxLat - minLat)) * 500 + 50);
-    return { x, y };
-  };
+const loadLeaflet = () => {
+  return new Promise((resolve, reject) => {
+    if (window.L) {
+      return resolve(window.L);
+    }
+    const existingScript = document.querySelector('script[data-leaflet="true"]');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(window.L), { once: true });
+      existingScript.addEventListener('error', () => reject(new Error('Leaflet failed to load')), { once: true });
+      return;
+    }
 
-  const mapHotspots = [
-    { name: 'Sylhet', lat: 24.8949, lng: 91.8687, type: 'disaster' },
-    { name: 'Sunamganj Shelter', lat: 25.0658, lng: 91.3950, type: 'shelter' },
-    { name: 'Khulna Relief Depot', lat: 22.8456, lng: 89.5403, type: 'warehouse' },
-    { name: 'Dhaka HQ', lat: 23.8103, lng: 90.4125, type: 'warehouse' },
-    { name: 'Rajshahi', lat: 24.3636, lng: 88.6241, type: 'disaster' },
-    { name: 'Chittagong Shelter', lat: 22.3569, lng: 91.7832, type: 'shelter' },
-  ];
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.crossOrigin = '';
+    script.dataset.leaflet = 'true';
+    script.onload = () => resolve(window.L);
+    script.onerror = () => reject(new Error('Leaflet tile library failed to load from CDN.'));
+    document.head.appendChild(script);
+  });
+};
+
+const TILE_LAYERS = {
+  dark: {
+    name: 'Dark Canvas',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    subdomains: 'abcd',
+  },
+  streets: {
+    name: 'Street Map',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+  },
+  satellite: {
+    name: 'Satellite Imagery',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+  },
+};
+
+const InteractiveLeafletMap = ({ disasters = [], inventories = [], requests = [], reason }) => {
+  const mapContainerRef = useRef(null);
+  const leafletInstanceRef = useRef(null);
+  const [activeTileKey, setActiveTileKey] = useState('dark');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  const activeDisaster = useMemo(() => {
+    return disasters.find((item) => item.status === 'Active') || disasters[0] || null;
+  }, [disasters]);
+
+  const mapCenter = useMemo(() => {
+    if (activeDisaster) {
+      const lat = Number(activeDisaster.lat);
+      const lng = Number(activeDisaster.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return [lat, lng];
+    }
+    return [BANGLADESH_CENTER.lat, BANGLADESH_CENTER.lng];
+  }, [activeDisaster]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const initLeaflet = async () => {
+      try {
+        setLoading(true);
+        const L = await loadLeaflet();
+        if (isCancelled || !mapContainerRef.current) return;
+
+        if (leafletInstanceRef.current) {
+          leafletInstanceRef.current.remove();
+          leafletInstanceRef.current = null;
+        }
+
+        const map = L.map(mapContainerRef.current, {
+          center: mapCenter,
+          zoom: activeDisaster ? 9 : 7,
+          zoomControl: true,
+        });
+
+        leafletInstanceRef.current = map;
+
+        const tileConfig = TILE_LAYERS[activeTileKey] || TILE_LAYERS.dark;
+        L.tileLayer(tileConfig.url, {
+          attribution: tileConfig.attribution,
+          subdomains: tileConfig.subdomains || 'abc',
+          maxZoom: 19,
+        }).addTo(map);
+
+        const createMarkerIcon = (label, color, bg) => {
+          return L.divIcon({
+            className: 'custom-map-pin',
+            html: `<div style="background:${bg}; border: 2px solid ${color}; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 11px; box-shadow: 0 0 10px ${color}88;">${label}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+          });
+        };
+
+        const createPopupStyle = (title, details, badgeColor = '#3b82f6') => `
+          <div style="font-family: system-ui, sans-serif; padding: 4px 2px; min-width: 200px;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: #111827; margin-bottom: 4px;">${title}</div>
+            <div style="height: 2px; background: ${badgeColor}; width: 40px; margin-bottom: 8px; border-radius: 2px;"></div>
+            <div style="font-size: 0.82rem; color: #374151; line-height: 1.4;">${details}</div>
+          </div>
+        `;
+
+        disasters.forEach((disaster) => {
+          const lat = Number(disaster.lat);
+          const lng = Number(disaster.lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const marker = L.marker([lat, lng], {
+            icon: createMarkerIcon('!', '#ef4444', 'rgba(239, 68, 68, 0.85)'),
+          }).addTo(map);
+          marker.bindPopup(createPopupStyle(
+            disaster.title,
+            `<strong>Type:</strong> ${disaster.disaster_type}<br/>
+             <strong>Severity:</strong> ${disaster.severity}<br/>
+             <strong>Affected:</strong> ${disaster.affected_districts}<br/>
+             <strong>Status:</strong> ${disaster.status}`,
+            '#ef4444'
+          ));
+        });
+
+        inventories.forEach((item) => {
+          const lat = Number(item.warehouse_lat);
+          const lng = Number(item.warehouse_lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const marker = L.marker([lat, lng], {
+            icon: createMarkerIcon('W', '#10b981', 'rgba(16, 185, 129, 0.85)'),
+          }).addTo(map);
+          marker.bindPopup(createPopupStyle(
+            item.warehouse_location || 'Warehouse Depot',
+            `<strong>Org:</strong> ${item.organization_name || 'Relief Agency'}<br/>
+             <strong>Stock:</strong> ${item.item_name}: ${item.quantity} ${item.unit}`,
+            '#10b981'
+          ));
+        });
+
+        const defaultFacilities = [
+          { name: 'Sylhet Disaster Shelter', lat: 24.8949 + 0.05, lng: 91.8687 - 0.04, type: 'shelter' },
+          { name: 'Sunamganj Emergency Care', lat: 25.0658 - 0.03, lng: 91.3950 + 0.03, type: 'hospital' },
+          { name: 'Dhaka Central Relief Hub', lat: 23.8103, lng: 90.4125, type: 'shelter' },
+          { name: 'Chittagong Coastal Shelter', lat: 22.3569 + 0.04, lng: 91.7832 - 0.03, type: 'shelter' },
+          { name: 'Khulna General Hospital', lat: 22.8456 - 0.02, lng: 89.5403 + 0.02, type: 'hospital' },
+        ];
+
+        defaultFacilities.forEach((fac) => {
+          const color = fac.type === 'hospital' ? '#06b6d4' : '#3b82f6';
+          const label = fac.type === 'hospital' ? 'H' : 'S';
+          const marker = L.marker([fac.lat, fac.lng], {
+            icon: createMarkerIcon(label, color, fac.type === 'hospital' ? 'rgba(6, 182, 212, 0.85)' : 'rgba(59, 130, 246, 0.85)'),
+          }).addTo(map);
+          marker.bindPopup(createPopupStyle(
+            fac.name,
+            `<strong>Facility:</strong> ${fac.type === 'hospital' ? 'Hospital' : 'Emergency Shelter'}<br/>
+             <em>Click marker to view location on real street map.</em>`,
+            color
+          ));
+
+          if (activeDisaster && fac.type === 'shelter') {
+            const disLat = Number(activeDisaster.lat);
+            const disLng = Number(activeDisaster.lng);
+            if (Number.isFinite(disLat) && Number.isFinite(disLng)) {
+              L.polyline([[disLat, disLng], [fac.lat, fac.lng]], {
+                color: '#22c55e',
+                weight: 4,
+                opacity: 0.8,
+                dashArray: '6, 8',
+              }).addTo(map);
+            }
+          }
+        });
+
+        requests.filter((req) => req.status === 'In-Transit').forEach((req) => {
+          const wh = inventories.find((inv) => req.assigned_warehouse?.includes(inv.warehouse_location));
+          const startLat = wh ? Number(wh.warehouse_lat) : 23.8103;
+          const startLng = wh ? Number(wh.warehouse_lng) : 90.4125;
+          const endLat = Number(req.destination_lat) || 24.8949;
+          const endLng = Number(req.destination_lng) || 91.8687;
+
+          if ([startLat, startLng, endLat, endLng].every(Number.isFinite)) {
+            L.polyline([[startLat, startLng], [endLat, endLng]], {
+              color: '#f59e0b',
+              weight: 4,
+              opacity: 0.95,
+              dashArray: '8, 6',
+            }).addTo(map);
+          }
+        });
+
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to initialize Leaflet map:', err);
+        if (!isCancelled) {
+          setLoadError(err.message || 'Interactive map tiles failed to load.');
+          setLoading(false);
+        }
+      }
+    };
+
+    initLeaflet();
+
+    return () => {
+      isCancelled = true;
+      if (leafletInstanceRef.current) {
+        leafletInstanceRef.current.remove();
+        leafletInstanceRef.current = null;
+      }
+    };
+  }, [activeTileKey, mapCenter, activeDisaster, disasters, inventories, requests]);
 
   return (
-    <>
-      <div style={{ marginBottom: '14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)', color: '#fbbf24', borderRadius: '10px', padding: '12px 14px', fontSize: '0.85rem' }}>
-        <AlertTriangle size={15} style={{ verticalAlign: 'middle', marginRight: '7px' }} />
-        {reason} The existing offline DisasterNet map is shown as a fallback.
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#60a5fa' }}>
+          <Layers size={15} />
+          <span>Interactive OpenStreetMap (No Google key required)</span>
+        </div>
+
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {Object.entries(TILE_LAYERS).map(([key, config]) => (
+            <button
+              key={key}
+              onClick={() => setActiveTileKey(key)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: activeTileKey === key ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                background: activeTileKey === key ? '#1d4ed8' : 'rgba(31,41,55,0.7)',
+                color: 'white',
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                fontWeight: activeTileKey === key ? 600 : 400,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {config.name}
+            </button>
+          ))}
+        </div>
       </div>
-      <div style={{ position: 'relative', width: '100%', height: '420px', background: '#0d1322', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-        <svg viewBox="0 0 800 600" style={{ width: '100%', height: '100%' }}>
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-          <path d="M 220,120 L 340,90 L 480,100 L 580,150 L 620,240 L 590,320 L 650,420 L 610,530 L 520,560 L 430,500 L 320,530 L 250,460 L 220,380 L 150,300 L 160,200 Z" fill="rgba(30,58,138,0.15)" stroke="rgba(59,130,246,0.4)" strokeWidth="2" strokeDasharray="6,4" />
-          {requests.filter((r) => r.status === 'In-Transit').map((req, idx) => {
-            const startPos = getMapXY(24.8949, 91.8687);
-            const endPos = getMapXY(req.destination_lat || 25.0658, req.destination_lng || 91.3950);
-            return <line key={`route-${idx}`} x1={startPos.x} y1={startPos.y} x2={endPos.x} y2={endPos.y} stroke="#f59e0b" strokeWidth="3" strokeDasharray="8,6" />;
-          })}
-          {mapHotspots.map((pin, index) => {
-            const { x, y } = getMapXY(pin.lat, pin.lng);
-            const fill = pin.type === 'disaster' ? '#ef4444' : pin.type === 'warehouse' ? '#10b981' : '#3b82f6';
-            return (
-              <g key={index}>
-                <circle cx={x} cy={y} r="14" fill={fill} stroke="white" strokeWidth="2" />
-                <text x={x} y={y + 4} textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">{pin.type === 'disaster' ? '!' : pin.type === 'warehouse' ? 'W' : 'S'}</text>
-                <text x={x} y={y + 30} textAnchor="middle" fill="#e5e7eb" fontSize="11" fontWeight="600">{pin.name}</text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-    </>
+
+      {reason && (
+        <div style={{ marginBottom: '10px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd', borderRadius: '8px', padding: '10px 12px', fontSize: '0.82rem' }}>
+          <AlertTriangle size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+          Using interactive OpenStreetMap tiles because: {reason}
+        </div>
+      )}
+
+      {loading && (
+        <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: '0.85rem' }}>
+          Loading real interactive map tiles…
+        </div>
+      )}
+
+      {loadError && (
+        <div style={{ padding: '14px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '8px', fontSize: '0.82rem' }}>
+          {loadError}
+        </div>
+      )}
+
+      <div
+        ref={mapContainerRef}
+        style={{
+          width: '100%',
+          height: '500px',
+          borderRadius: '14px',
+          border: '1px solid rgba(255,255,255,0.12)',
+          overflow: 'hidden',
+          background: '#0d1322',
+          zIndex: 1,
+        }}
+      />
+    </div>
   );
 };
 
@@ -84,10 +307,15 @@ export const DisasterMap = ({ disasters = [], inventories = [], requests = [] })
   const evacuationPolylinesRef = useRef([]);
   const deliveryPolylinesRef = useRef([]);
   const infoWindowRef = useRef(null);
+
   const [mapError, setMapError] = useState('');
   const [mapLoading, setMapLoading] = useState(true);
   const [facilities, setFacilities] = useState([]);
   const [routeSummary, setRouteSummary] = useState(null);
+
+  const [storedApiKey, setStoredApiKey] = useState(() => getGoogleMapsApiKey());
+  const [keyInput, setKeyInput] = useState(() => getGoogleMapsApiKey());
+  const [showKeyInput, setShowKeyInput] = useState(false);
 
   const activeDisaster = useMemo(() => {
     return disasters.find((item) => item.status === 'Active') || disasters[0] || null;
@@ -99,6 +327,20 @@ export const DisasterMap = ({ disasters = [], inventories = [], requests = [] })
     const lng = Number(activeDisaster.lng);
     return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : BANGLADESH_CENTER;
   }, [activeDisaster]);
+
+  const handleApplyKey = () => {
+    setGoogleMapsApiKey(keyInput);
+    setStoredApiKey(keyInput.trim());
+    setMapError('');
+    setShowKeyInput(false);
+  };
+
+  const handleClearKey = () => {
+    setGoogleMapsApiKey('');
+    setStoredApiKey('');
+    setKeyInput('');
+    setMapError('');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -176,7 +418,7 @@ export const DisasterMap = ({ disasters = [], inventories = [], requests = [] })
 
     const initGoogleMap = async () => {
       if (!hasGoogleMapsApiKey()) {
-        setMapError('Google Maps API key is not configured. Run SET_GOOGLE_MAPS_API_KEY.bat, then restart the app.');
+        setMapError('No Google Maps API key provided. Using interactive OpenStreetMap.');
         setMapLoading(false);
         return;
       }
@@ -359,30 +601,118 @@ export const DisasterMap = ({ disasters = [], inventories = [], requests = [] })
     return () => {
       cancelled = true;
     };
-  }, [activeDisaster, disasters, inventories, requests, routeOrigin]);
+  }, [activeDisaster, disasters, inventories, requests, routeOrigin, storedApiKey]);
 
   return (
     <div className="glass-card" style={{ padding: '24px', position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '18px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Navigation color="#3b82f6" /> Google Disaster Map & Emergency Facility Locator
+            <Navigation color="#3b82f6" /> Disaster Map & Facilities Locator
           </h2>
           <p style={{ fontSize: '0.82rem', color: '#9ca3af', marginTop: '4px' }}>
             Affected areas, nearby hospitals/shelters, evacuation routing and active relief-delivery routes.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', background: 'rgba(31,41,55,0.6)', padding: '8px 14px', borderRadius: '10px', flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f87171' }}><ShieldAlert size={14} /> Disaster</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#34d399' }}><Warehouse size={14} /> Warehouse</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#60a5fa' }}><Home size={14} /> Shelter / Hospital</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fbbf24' }}><Truck size={14} /> Delivery Route</span>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowKeyInput(!showKeyInput)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 12px',
+              borderRadius: '8px',
+              background: storedApiKey ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+              border: storedApiKey ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)',
+              color: storedApiKey ? '#34d399' : '#60a5fa',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            <Key size={14} />
+            {storedApiKey ? 'Google Maps API Key Active' : 'Configure Google Maps Key'}
+          </button>
+
+          <div style={{ display: 'flex', gap: '10px', fontSize: '0.75rem', background: 'rgba(31,41,55,0.6)', padding: '8px 14px', borderRadius: '10px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f87171' }}><ShieldAlert size={14} /> Disaster</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#34d399' }}><Warehouse size={14} /> Warehouse</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#60a5fa' }}><Home size={14} /> Shelter / Hospital</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fbbf24' }}><Truck size={14} /> Delivery Route</span>
+          </div>
         </div>
       </div>
 
-      {mapError ? (
-        <LegacyFallbackMap requests={requests} reason={mapError} />
-      ) : (
+      {showKeyInput && (
+        <div style={{ marginBottom: '16px', background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ color: 'white', fontWeight: 600, fontSize: '0.88rem' }}>Google Maps Platform API Key</span>
+            <button onClick={() => setShowKeyInput(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>
+              <X size={16} />
+            </button>
+          </div>
+          <p style={{ color: '#9ca3af', fontSize: '0.8rem', marginBottom: '10px' }}>
+            Enter your Google Maps JavaScript API Key to enable Google Places, Google Driving Directions and Route Matrix optimization.
+          </p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              placeholder="AIzaSy..."
+              style={{
+                flex: 1,
+                minWidth: '240px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.2)',
+                background: 'rgba(31,41,55,0.8)',
+                color: 'white',
+                fontSize: '0.85rem',
+              }}
+            />
+            <button
+              onClick={handleApplyKey}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                background: '#2563eb',
+                color: 'white',
+                border: 'none',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Check size={14} /> Apply Key
+            </button>
+            {storedApiKey && (
+              <button
+                onClick={handleClearKey}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  color: '#f87171',
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Clear Key
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {storedApiKey && !mapError ? (
         <>
           {mapLoading && (
             <div style={{ marginBottom: '12px', color: '#93c5fd', fontSize: '0.85rem' }}>Loading Google Maps, facilities and routes…</div>
@@ -406,6 +736,13 @@ export const DisasterMap = ({ disasters = [], inventories = [], requests = [] })
             </div>
           </div>
         </>
+      ) : (
+        <InteractiveLeafletMap
+          disasters={disasters}
+          inventories={inventories}
+          requests={requests}
+          reason={mapError}
+        />
       )}
     </div>
   );

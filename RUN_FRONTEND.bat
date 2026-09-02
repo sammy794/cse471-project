@@ -17,7 +17,7 @@ if not exist "node_modules" (
 )
 
 echo Starting frontend at http://localhost:5173
-call npm run dev
+call npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 
 if errorlevel 1 (
   echo.

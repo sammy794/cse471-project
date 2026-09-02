@@ -9,6 +9,11 @@ import { OrgDashboard } from './pages/OrgDashboard';
 import { CitizenDashboard } from './pages/CitizenDashboard';
 import { HospitalDashboard } from './pages/HospitalDashboard';
 import { ShelterDashboard } from './pages/ShelterDashboard';
+import { VolunteerDashboard } from './pages/VolunteerDashboard';
+import { DonorDashboard } from './pages/DonorDashboard';
+import { BeneficiaryDashboard } from './pages/BeneficiaryDashboard';
+import { PublicTransparency } from './pages/PublicTransparency';
+import { GovernmentOversight } from './pages/GovernmentOversight';
 import { Navbar } from './components/Navbar';
 import { AlertsBanner } from './components/AlertsBanner';
 import { DisasterMap } from './components/DisasterMap';
@@ -82,10 +87,13 @@ const AppContent = () => {
 
   // ── Not logged in → registration first, with a direct switch to sign in ──
   if (!user) {
-    if (authPage === 'login') {
-      return <Login onSwitchToRegister={() => setAuthPage('register')} />;
+    if (authPage === 'transparency') {
+      return <PublicTransparency onBack={() => setAuthPage('register')} />;
     }
-    return <Register onSwitchToLogin={() => setAuthPage('login')} />;
+    if (authPage === 'login') {
+      return <Login onSwitchToRegister={() => setAuthPage('register')} onViewTransparency={() => setAuthPage('transparency')} />;
+    }
+    return <Register onSwitchToLogin={() => setAuthPage('login')} onViewTransparency={() => setAuthPage('transparency')} />;
   }
 
   // ── Logged in → role dashboard with navigation tabs ──
@@ -100,6 +108,10 @@ const AppContent = () => {
           />
         </div>
       );
+    }
+
+    if (activeTab === 'transparency') {
+      return <PublicTransparency />;
     }
 
     if (activeTab === 'alerts') {
@@ -146,15 +158,21 @@ const AppContent = () => {
           <div>
             <GovtDashboard />
             <GovtViewDashboard />
+            <GovernmentOversight />
           </div>
         );
       case 'organization':
         return <OrgDashboard />;
+      case 'volunteer':
+        return <VolunteerDashboard />;
+      case 'donor':
+        return <DonorDashboard />;
+      case 'beneficiary':
+        return <BeneficiaryDashboard />;
       case 'hospital':
         return <HospitalDashboard />;
       case 'shelter':
         return <ShelterDashboard />;
-      case 'single_person':
       default:
         return <CitizenDashboard />;
     }

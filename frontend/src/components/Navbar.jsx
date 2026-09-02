@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Shield, User, LogOut, Trash2, Building, Radio, Award, AlertTriangle, Home } from 'lucide-react';
+import { Shield, User, Users, LogOut, Trash2, Building, Radio, Award, AlertTriangle, Home } from 'lucide-react';
 
 export const Navbar = ({ activeTab, setActiveTab }) => {
   const { user, logout, deleteAccount } = useAuth();
@@ -18,9 +18,13 @@ export const Navbar = ({ activeTab, setActiveTab }) => {
         return <span className="badge badge-hospital"><Building size={13} /> Hospital</span>;
       case 'shelter':
         return <span className="badge badge-shelter"><Home size={13} /> Disaster Shelter</span>;
-      case 'single_person':
+      case 'volunteer':
+        return <span className="badge badge-org"><Users size={13} /> Volunteer</span>;
+      case 'donor':
+        return <span className="badge badge-user"><User size={13} /> Donor</span>;
+      case 'beneficiary':
       default:
-        return <span className="badge badge-user"><User size={13} /> Single Person</span>;
+        return <span className="badge badge-user"><User size={13} /> Citizen / Beneficiary</span>;
     }
   };
 
@@ -92,6 +96,13 @@ export const Navbar = ({ activeTab, setActiveTab }) => {
             style={{ fontSize: '0.85rem', padding: '8px 16px' }}
           >
             Emergency Alerts
+          </button>
+          <button
+            className={`btn ${activeTab === 'transparency' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveTab('transparency')}
+            style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+          >
+            Transparency
           </button>
         </div>
 
